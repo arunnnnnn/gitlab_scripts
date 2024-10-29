@@ -1,0 +1,172 @@
+#CI Stages to create TaskDefinition in ECS cluster
+variables:
+   UserInput: "TaskDefinition.csv"
+   UserInputENV: "env.csv"
+
+#include:
+#  - local: 'job1.yml'
+
+stages:
+    - Function_Perform
+    - TD_CF_template
+    - CloudFormation_TD
+
+#Stage1
+.Purpose:
+  stage: Function_Perform
+  script:
+    #- TODO=$(grep Status $UserInput | cut -d\, -f2)
+    - TODO=modify
+#  script:
+    - echo "TODOIT=${TODO}" >> build.env
+    - cat build.env
+    - echo $TODOIT
+#Export json to other stages
+  artifacts:
+    expire_in: 1 days
+#Export VarVal to other stages
+    reports:
+      dotenv: build.env
+#Perform on
+  only:
+    - main 
+    - dev
+    - sit
+
+Create_JSON:
+  stage: TD_CF_template
+  before_script:
+    - echo "Repo contents"
+    - ls
+  script:   
+#Collecting input
+    - |
+        while IFS="," read -r Action Container_Name Image_Name Container_Memory Container_Port Host_Port Family_Name AccountNo TaskCPU TaskMEM Compatibility TaskRoleArn Task_Execution_Role
+        do
+        echo "=== SAMPLE OF COLLECTED VARIABLES FROM FIELDS ==="
+        echo "Container_Name $Container_Name"
+        echo "Image_Name $Image_Name"
+        echo "Family_Name $Family_Name"
+        echo "AccountNo $AccountNo"
+        echo "Action $Action"
+        export TODOIT=${Action}
+        echo $Family_Name >> output/Family_Name.csv
+        cp taskdef-1.json output/taskdef-1-$Family_Name.json
+        cp taskdef-2.json output/taskdef-2-$Family_Name.json
+        echo > TEMPENV
+        echo -e \"environment\": \[ >>   TEMPENV
+          #lOOP TO COLLECT ENV NAME
+          i=1
+          while IFS="," read -r rec1
+            do
+                if [ -z "$rec1" ]; then
+                    echo * EnvVars EMPTY *
+                    echo  > TEMPENV
+                  else
+                    echo  -e \{\"Name\" : \"$rec1\", \"Value\" : \"dummyVal${i}\"\}, >> TEMPENV
+                fi   
+            i=$((i+1))
+            done < <(cut -d "," -f1,1 ${Family_Name}_EnvVars.csv | tail -n +2)
+            
+          echo ---- END OF ENV NAME COLLECTION ---
+          #lOOP TO COLLECT ENV VLAUE
+          i=1
+          while IFS="," read -r rec1
+            do
+                if [ -z "$rec1" ]; then
+                    echo  > TEMPENV
+                  else
+                    sed -i "s|dummyVal${i}|$rec1|g" TEMPENV
+                fi
+            
+            i=$((i+1))
+            done < <(cut -d "," -f2,2 ${Family_Name}_EnvVars.csv | tail -n +2)
+          echo ---- END OF ENV VALUE COLLECTION ---
+          echo  -e \{\"Name\" : \"HOSTNAME\", \"Value\" : \"$Container_Name\"\} \], >> TEMPENV
+          cat TEMPENV
+        #REPLACE THE TEMPLATE WITH VARIABLE
+        sed -i "s|Container_Name|$Container_Name|g" output/taskdef-1-$Family_Name.json
+        sed -i "s|Image_Name|$Image_Name|g" output/taskdef-1-$Family_Name.json
+        sed -i "s|Container_Memory|$Container_Memory|g" output/taskdef-1-$Family_Name.json
+        sed -i "s|Container_Port|$Container_Port|g" output/taskdef-2-$Family_Name.json
+        sed -i "s|Host_Port|$Host_Port|g" output/taskdef-2-$Family_Name.json
+        sed -i "s|Family_Name|$Family_Name|g" output/taskdef-2-$Family_Name.json
+        sed -i "s|AccountNo|$AccountNo|g" output/taskdef-2-$Family_Name.json
+        sed -i "s|TaskCPU|$TaskCPU|g" output/taskdef-2-$Family_Name.json
+        sed -i "s|TaskMEM|$TaskMEM|g" output/taskdef-2-$Family_Name.json
+        sed -i "s|PLATE|$Compatibility|g" output/taskdef-2-$Family_Name.json
+        sed -i "s|tskrolarn|$TaskRoleArn|g" output/taskdef-2-$Family_Name.json
+        sed -i "s|tskexerol|$Task_Execution_Role|g" output/taskdef-2-$Family_Name.json
+        #COMBINE JSON PARTS
+        cat TEMPENV >> output/taskdef-1-$Family_Name.json
+        cat output/taskdef-2-$Family_Name.json >> output/taskdef-1-$Family_Name.json
+        cat output/taskdef-1-$Family_Name.json > output/taskdef-$Family_Name.json
+        cat output/taskdef-$Family_Name.json
+        done < <(tail -n +2 $UserInput)
+      
+#Export VarVal to other stages
+    - echo ---- END OF REPLACEMENT ---
+    - echo "TODOIT=${TODOIT}" >> build.env
+    - cat output/Family_Name.csv
+    - cat build.env
+
+#Verifying output and artifact storage
+  after_script:
+    - ls output/
+#Export json to other stages
+  artifacts:
+    expire_in: 1 days
+    paths:
+    - output/*
+#Export VarVal to other stages
+    reports:
+      dotenv: build.env
+#Perform on
+  only:
+    - main
+    - dev
+    - sit
+
+Deploy_CloudFormation_TD:
+  stage: CloudFormation_TD
+#Dependencies for Deploying on AWS
+  needs: [Create_JSON]
+  dependencies:
+    - Create_JSON
+  before_script:
+    - aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID_SANDBOX
+    - aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEYSANDBOX
+    - aws configure set region 	$AWS_REGION_SANDBOX
+  script:
+    #CASE CONVERSTION, small & CAPS
+    - |
+      export ACTIONSMALL=$(echo ${TODOIT,,})
+      export ACTIONCAPS=$(echo ${TODOIT^^})
+      while read -r FAMILYLINE
+        #Read output/Family_Name.csv FAMILYLINE and create CFS
+        do     
+          aws cloudformation $ACTIONSMALL-stack --stack-name $FAMILYLINE-TD --template-body file://output/taskdef-$FAMILYLINE.json   
+          # read the filter the status
+          export STACK_STATUS=$(aws cloudformation describe-stacks --stack-name $FAMILYLINE-TD --query 'Stacks[0].StackStatus' | cut -d\" -f2)
+            # Check the status and wait till it complete
+            while [ "$STACK_STATUS" != "${ACTIONCAPS}_COMPLETE" ]; 
+              do
+                sleep 1
+                aws cloudformation describe-stacks --stack-name $FAMILYLINE-TD --query 'Stacks[0].[StackStatus,StackStatusReason, CreationTime]' > stack.log
+                STACK_STATUS=$(cat stack.log | head -2 | tail -1 | cut -d\" -f2)
+                echo $STACK_STATUS for Stack $FAMILYLINE-TD
+                cat stack.log
+                  #If stack failed terminate the job
+                  if [ "$STACK_STATUS" = "ROLLBACK_COMPLETE" ]; then
+                    echo "---------- bye bye ----------"
+                  else
+                    echo "---------- sad ----------"
+                  fi
+              done
+        done < output/Family_Name.csv
+        
+  #when: manual
+  only:
+    - main
+    - dev
+    - sit

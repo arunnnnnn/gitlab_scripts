@@ -1,0 +1,17 @@
+variables:
+    DOCKER_REGISTRY: 650869055350.dkr.ecr.us-east-2.amazonaws.com
+    APP_NAME: arun
+stages:
+  - build
+  - deploy
+build_image:
+    stage: build
+    script:
+        - docker build -t $DOCKER_REGISTRY/$APP_NAME:latest .
+deploy_image:
+    stage: deploy
+    before_script:  
+    script:
+      - aws ecr get-login-password | docker login --username AWS --password-stdin $DOCKER_REGISTRY
+      -  docker push $DOCKER_REGISTRY/$APP_NAME:latest
+    when: manual

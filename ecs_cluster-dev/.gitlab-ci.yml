@@ -1,0 +1,86 @@
+#CI Stages to create CLUSTER in ECS cluster
+variables:
+  
+stages:
+    - CLUSTER_CF_template
+    - CloudFormation_CLUSTER
+#Stage1
+Create_JSON:
+  stage: CLUSTER_CF_template
+  before_script:
+    - echo "Repo contents"
+    - ls
+#Collecting input
+  script:
+    - var=$(grep clustername cluster.txt | cut -d\= -f2)
+    - echo $var
+#Replacing the template with user provided values
+    - sed -i "s|my-cluster-name|$var|g" cluster-template.json
+#Export VarVal to other stages
+    - echo "STACKNAME=${var}" >> build.env
+    - cat build.env
+#Verifying output and artifact storage
+    - cp cluster-template.json output/${var}-cluster-template.json
+    - cat output/${var}-cluster-template.json
+  after_script:
+    - ls output/
+#Export json to other stages
+  artifacts:
+    expire_in: 1 days
+    paths:
+    - output/*
+#Export VarVal to other stages
+    reports:
+      dotenv: build.env
+#Perform on
+  only:
+    - main 
+    - dev
+    - sit
+
+Deploy_CloudFormation_CLUSTER:
+  stage: CloudFormation_CLUSTER
+#Dependencies for Deploying on AWS
+  needs: [Create_JSON]
+  dependencies:
+    - Create_JSON
+  before_script:
+    - aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID_SANDBOX
+    - aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEYSANDBOX
+    - aws configure set region 	$AWS_REGION_SANDBOX
+#  script:
+#    - |
+#       cluster_status=$(aws ecs describe-clusters --clusters $STACKNAME --query 'clusters[0].status' | cut -d\" -f2)
+#       echo "Pool $cluster_status"
+#       if [ "$cluster_status" = "ACTIVE" ]; then
+#       exit 1
+#       else
+#       aws cloudformation create-stack --stack-name $STACKNAME-ecs-cluster --template-body file://output/$STACKNAME-cluster-template.json
+#       
+#       fi
+  script:
+    - aws cloudformation create-stack --stack-name $STACKNAME-ecs-cluster --template-body file://output/$STACKNAME-cluster-template.json
+#Verify stack status & print events
+    - |
+       while [ "$stack_status" != "CREATE_COMPLETE" ]; do
+        echo "Stack is in $stack_status state. Waiting for stack to be created."
+        sleep 1
+        
+        aws cloudformation describe-stacks --stack-name $STACKNAME-ecs-cluster --query 'Stacks[0].[StackStatus,StackStatusReason, CreationTime]' > stack.log
+        stack_status=$(cat stack.log | head -2 | tail -1 | cut -d\" -f2)
+        echo $stack_status
+        cat stack.log
+
+          if [ "$stack_status" = "ROLLBACK_COMPLETE" ]; then
+          exit 1
+          else
+          echo ----------
+          fi
+
+       done
+  when: manual
+  only:
+    - main 
+    - dev 
+    - sit 
+

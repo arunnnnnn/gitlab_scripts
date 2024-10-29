@@ -1,0 +1,160 @@
+#CI Stages to create service in ECS cluster
+variables:
+  UserInput: "service.csv"
+
+stages:
+    - Purpose
+    - SR_CF_template
+    - CloudFormation_SR
+
+Stack condition:
+  stage: Purpose
+  before_script:
+    #- TODO=$(grep Status $UserInput | cut -d\, -f2)
+    - TODO=create
+  script:
+    - echo "TODOIT=${TODO}" >> build.env
+    - cat build.env
+    - echo $TODOIT
+  artifacts:
+    expire_in: 1 days
+#Export VarVal to other stages
+    reports:
+      dotenv: build.env
+  only:
+    - main 
+    - DEV
+    - sit
+
+#Stage2
+Create_JSON:
+  stage: SR_CF_template
+  before_script:
+    - echo "Repo contents"
+    - ls
+#Collecting input
+  script:
+    - |
+        while IFS="," read -r serviceName Cluster Desired_Count Launch_Type TaskDefinition MaximumPercent MinimumPercent Scheduling_Strategy
+        do
+        echo "==="
+        echo "serviceName $serviceName"
+        echo "Cluster $Cluster"
+        echo "Desired_Count $Desired_Count"
+        echo "Launch_Type $Launch_Type"
+        echo "TaskDefinition $TaskDefinition"
+        echo "MaximumPercent $MaximumPercent"
+        echo "MinimumPercent $MinimumPercent"
+        echo "Scheduling_Strategy $Scheduling_Strategy"
+        echo "==="
+
+
+
+        echo $serviceName >> output/serviceName.csv
+        cp service-template.json output/service-$serviceName.json
+
+        sed -i "s|My_service|$serviceName|g" output/service-$serviceName.json
+        sed -i "s|Cluste_name|$Cluster|g" output/service-$serviceName.json
+        sed -i "s|Count_Desired|$Desired_Count|g" output/service-$serviceName.json
+        sed -i "s|Type_Launch|$Launch_Type|g" output/service-$serviceName.json
+        sed -i "s|taskdef_name|$TaskDefinition|g" output/service-$serviceName.json
+        sed -i "s|max_Percent|$MaximumPercent|g" output/service-$serviceName.json
+        sed -i "s|min_Percent|$MinimumPercent|g" output/service-$serviceName.json
+        sed -i "s|Startergy|$Scheduling_Strategy|g" output/service-$serviceName.json
+        cat output/service-$serviceName.json
+        done < <(tail -n +2 $UserInput)
+       
+
+    - cat output/serviceName.csv
+    - echo "TODOIT=${TODOIT}" >> build.env
+    - cat build.env
+  after_script:
+    - ls output/
+#Export json to other stages
+  artifacts:
+    expire_in: 1 days
+    paths:
+    - output/*
+#Export VarVal to other stages
+    reports:
+      dotenv: build.env
+#Perform on
+  only:
+    - main 
+    - DEV
+    - sit
+  
+Deploy_CloudFormation_SR:
+  stage: CloudFormation_SR
+#Dependencies for Deploying on AWS
+  needs: [Create_JSON]
+  dependencies:
+    - Create_JSON
+  before_script:
+    - aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID_SANDBOX
+    - aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEYSANDBOX
+    - aws configure set region 	$AWS_REGION_SANDBOX
+    - |
+      while IFS="," read -r serviceName Cluster Desired_Count Launch_Type TaskDefinition MaximumPercent MinimumPercent Scheduling_Strategy
+      do
+        echo "==="
+        echo "serviceName $serviceName"
+        echo "Cluster $Cluster"
+        echo "TaskDefinition $TaskDefinition"
+        echo ""
+        
+       cluster_status=$(aws ecs describe-clusters --clusters $Cluster --query 'clusters[0].status'| cut -d\" -f2)
+       echo $cluster_status
+       if [ "$cluster_status" = "ACTIVE" ]; then
+       echo "cluster $Cluster"
+       else
+       echo "cluster is not available"
+       exit 1
+       fi
+       
+       status=$(aws ecs describe-task-definition --task-definition $TaskDefinition | grep status | cut -d ":" -f2 | cut -d\" -f2)
+       echo $status
+       if [ "$status" == "ACTIVE" ]; then
+       echo "Task definition $TaskDefinition is available"
+       else
+       echo "TD-$TaskDefinition is not available"
+       exit 1
+       fi
+      done < <(tail -n +2 $UserInput)
+
+
+  script:
+
+    - |
+      export actioni=$(echo ${TODOIT,,})
+      export conditioni=$(echo ${TODOIT^^})
+      echo $actioni $conditioni
+      while read -r line
+        do
+          aws cloudformation $actioni-stack --stack-name $line-Service --template-body file://output/service-$line.json
+          
+          export stack_status=$(aws cloudformation describe-stacks --stack-name $line-Service --query 'Stacks[0].StackStatus' | cut -d\" -f2)
+          echo $stack_status
+
+            while [ "$stack_status" != "${conditioni}_COMPLETE" ]; 
+              do
+                echo "Stack is in $stack_status state. Waiting for stack to be created."
+                sleep 1
+                aws cloudformation describe-stacks --stack-name $line-Service --query 'Stacks[0].[StackStatus,StackStatusReason, CreationTime]' > stack.log
+                stack_status=$(cat stack.log | head -2 | tail -1 | cut -d\" -f2)
+                echo $stack_status
+                cat stack.log
+                  if [ "$stack_status" = "ROLLBACK_COMPLETE" ]; then
+                    exit 1
+                  else
+                    echo ----------
+                  fi
+              done
+        done < output/serviceName.csv
+    
+
+  when: manual
+  only:
+    - main 
+    - DEV 
+    - sit 

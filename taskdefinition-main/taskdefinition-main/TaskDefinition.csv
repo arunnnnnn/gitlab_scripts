@@ -1,0 +1,3 @@
+Action,Container_Name,Image_Name,Container_Memory,Container_Port,Host_Port,Family_Name,AccountNo,TaskCPU,TaskMEM,Compatibility,TaskRoleArn,Task_Execution_Role,Task_Memory,Task_CPU
+create,second,nginx:latest,64,,,second,650869055350,10,128,EC2,ecsTaskExecutionRole,ecsTaskExecutionRole,512,256
+create,first,nginx:latest,64,80,8081,first,650869055350,10,128,EC2,ecsTaskExecutionRole,ecsTaskExecutionRole,256,512

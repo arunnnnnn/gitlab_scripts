@@ -1,0 +1,26 @@
+#CI Stages to create TaskDefinition in ECS cluster
+variables:
+   UserInput: "CFStack.csv"
+   
+stages:
+    - CloudFormation
+
+#Stage1
+CloudFormation:
+  stage: CloudFormation
+  before_script:
+    - aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID_SANDBOX
+    - aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEYSANDBOX
+    - aws configure set region 	$AWS_REGION_SANDBOX
+  script:
+    - |
+      while read -r line
+        do
+          echo Read as - $line 
+          aws cloudformation delete-stack --stack-name $line
+        done < $UserInput   
+#  when: manual
+  only:
+    - main
+#          aws cloudformation wait stack-delete-complete --stack-name $line
+

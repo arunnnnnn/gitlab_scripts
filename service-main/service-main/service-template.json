@@ -1,0 +1,27 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Resources": {
+      "ECSService": {
+        "Type": "AWS::ECS::Service",
+        "Properties": {
+          "ServiceName": "My_service",
+          "Cluster": "Cluste_name",
+          "DesiredCount": "Count_Desired",
+          "LaunchType": "Type_Launch",
+          "TaskDefinition": "taskdef_name",
+          "DeploymentConfiguration": {
+            "MaximumPercent": "max_Percent",
+            "MinimumHealthyPercent": "min_Percent",
+            "DeploymentCircuitBreaker": {
+              "Enable": false,
+              "Rollback": false
+            }
+          },
+          "SchedulingStrategy": "Startergy",
+          "DeploymentController": {
+            "Type": "ECS"
+          }
+        }
+      }
+    }
+  }

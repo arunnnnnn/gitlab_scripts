@@ -1,0 +1,36 @@
+
+ 
+          "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-group": "/ecs/Family_Name",
+                    "awslogs-region": "us-east-2",
+                    "awslogs-stream-prefix": "ecs"
+                }
+            },
+          "mountPoints": [
+                {
+                    "sourceVolume": "InputXml",
+                    "containerPath": "/data/InputXml"
+                }
+            ],
+          },
+        ],
+        "volumes": [
+        {
+            "name": "InputXml",
+            "host": {
+                "sourcePath": "/data/Claims/InputXml"
+            }
+        }
+        ],
+        "taskRoleArn":"arn:aws:iam::AccountNo:role/tskrolarn",
+        "requiresCompatibilities":["EC2"],
+        "cpu":"cpu_task",
+        "memory":"memory_task",
+        "Family": "Family_Name",
+        "ExecutionRoleArn": "arn:aws:iam::AccountNo:role/tskexerol"
+      }
+    }
+  }
+}

@@ -1,0 +1,18 @@
+            "PortMappings": [
+              {
+                "ContainerPort": "Container_Port",
+                "HostPort": "Host_Port"
+              }
+            ]
+          }
+        ],
+        "taskRoleArn":"arn:aws:iam::AccountNo:role/tskrolarn",
+        "requiresCompatibilities":["EC2"],
+        "cpu":"256",
+        "memory":"512",
+        "Family": "Family_Name",
+        "ExecutionRoleArn": "arn:aws:iam::AccountNo:role/tskexerol"
+      }
+    }
+  }
+}

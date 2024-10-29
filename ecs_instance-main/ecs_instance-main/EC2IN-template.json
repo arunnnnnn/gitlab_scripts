@@ -1,0 +1,46 @@
+
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  
+  "Resources": {
+    "EC2Instance":{
+       "Type":"AWS::EC2::Instance",
+       "Properties":{
+       "ImageId": "my-image",
+       "InstanceType": "instance-type",
+       "KeyName": "keypair",
+       "SecurityGroupIds": ["sg"],
+       "SubnetId": "subnet_id",
+       "IamInstanceProfile": "role",
+       "Tags" : [
+            {"Key" : "Name", "Value" : "EC2Name"}
+        ],
+       "UserData": {
+        "Fn::Base64": {
+          "Fn::Join": [
+            "",
+            [
+              "#!/bin/bash -ex \n",
+              "yum -y update \n",
+              "yum -y install net-tools wget telnet yum-utils device-mapper-persistent-data lvm2 \n",
+              "yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo -y \n",
+              "yum -y update && yum -y  install docker-ce \n",
+              "systemctl daemon-reload \n",
+              "systemctl start docker \n",
+              "systemctl enable docker \n",
+              "systemctl restart docker \n",
+              "curl -O https://s3.RGON.amazonaws.com/amazon-ecs-agent-RGON/amazon-ecs-init-latest.x86_64.rpm \n",
+              "yum localinstall -y amazon-ecs-init-latest.x86_64.rpm \n",
+              "echo ECS_CLUSTER=ecs-cluster > /etc/ecs/ecs.config \n",
+              "systemctl enable ecs \n",
+              "systemctl start ecs \n",
+              "systemctl restart ecs \n"
+            ]
+          ]
+        }
+      }
+ 
+      }
+     }
+    }
+}

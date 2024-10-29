@@ -1,0 +1,8 @@
+VARIABLES,VALUES,SECVAR,SECVAL
+LOGGING_LEVEL,error,REGION_URL,arn:aws:ssm:us-east-2:650869055350:parameter/region
+LOG,/log
+THEME,BLACK
+TIMEZONE,ist
+LOGPATH,/mdslog
+ENV,BASH
+CONFIGPATH,/home/second/config

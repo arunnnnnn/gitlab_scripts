@@ -1,0 +1,226 @@
+#CI Stages to create TaskDefinition in ECS cluster
+variables:
+   UserInput: "TaskDefinition.csv"
+   UserInputENV: "arn:aws:ssm:us-east-2:650869055350:parameter/REGION"
+
+#include:
+#  - local: 'job1.yml'
+
+stages:
+    - Excel2CSV
+    - TD_CF_template
+    - CloudFormation_TD
+
+.Excel_to_CSV:
+  stage: Excel2CSV
+  before_script:
+  - python3 --version
+
+  script:
+    - python3 xl2csv.py
+    - ls
+  artifacts:
+    expire_in: 1 days
+    paths:
+    - output/*
+
+Create_JSON:
+  stage: TD_CF_template
+  before_script:
+    - echo "Repo contents"
+    - python3 xl2csv.py
+    - ls
+  script:   
+#Collecting input
+    - |
+        while IFS="," read -r Action AccountNo TaskDefinition_family TaskRoleARN Compatibility TaskExecutionRoleARN TaskMemory TaskCPU Volume_Name Volume_SourcePath Container_Name Image_URI Mem_Hard Container_Port Host_Port MountPoint_sourceVolume MountPoint_containerPath logDriver Volume_SourcePath
+        do
+        echo "AccountNo $AccountNo"
+        echo "TaskDefinition_family $TaskDefinition_family"
+        echo "TaskRoleARN $TaskRoleARN"
+        echo "Compatibility $Compatibility"
+        echo "TaskExecutionRoleARN $TaskExecutionRoleARN"
+        echo "TaskMemory $TaskMemory"
+        echo "TaskCPU $TaskCPU"
+        echo "Volume_Name $Volume_Name"
+        echo "Volume_SourcePath $Volume_SourcePath"
+        echo "Container_Name $Container_Name"
+        echo "Image_URI $Image_URI"
+        echo "Mem_Hard $Mem_Hard"
+        echo "Container_Port $Container_Port"
+        echo "Host_Port $Host_Port"
+        echo "MountPoint_sourceVolume $MountPoint_sourceVolume"
+        echo "MountPoint_containerPath $MountPoint_containerPath"
+        echo "logDriver $logDriver"
+        export TODOIT=${Action}
+        echo $TaskDefinition_family >> output/Family_Name.csv
+        cp taskdef-1.json output/taskdef-1-$TaskDefinition_family.json
+        cp taskdef-2.json output/taskdef-2-$TaskDefinition_family.json
+        
+        ## COLLECTION LOOP ##
+        ######## VARIABLES PART-1 STARTS #######
+
+        echo -e \"environment\": \[ >   TEMPENV
+          #lOOP TO COLLECT ENV NAME
+          i=1
+          while IFS="," read -r rec1
+            do
+                if [ -z "$rec1" ]; then
+                    echo * EnvVars EMPTY *
+                  else
+                    echo  -e \{\"Name\" : \"$rec1\", \"Value\" : \"dummyVal${i}\"\}, >> TEMPENV
+                fi   
+            i=$((i+1))
+            done < <(cut -d "," -f1,1 ${TaskDefinition_family}_EnvVars.csv | tail -n +2)
+            
+          echo ---- END OF ENV NAME COLLECTION ---
+          ######## VARIABLES PART-2 STARTS #######
+
+          i=1
+          while IFS="," read -r rec1
+            do
+                if [ -z "$rec1" ]; then
+                    echo * EnvVal EMPTY *
+                  else
+                    sed -i "s|dummyVal${i}|$rec1|g" TEMPENV
+                fi            
+            i=$((i+1))
+            done < <(cut -d "," -f2,2 ${TaskDefinition_family}_EnvVars.csv | tail -n +2)
+          
+          echo ---- END OF ENV VALUE COLLECTION ---
+          echo  -e \], >> TEMPENV
+          cat TEMPENV
+
+        ######## VARIABLES PART-3 STARTS #######
+        echo -e \"secrets\": \[ >   TEMPENVSEC
+          #lOOP TO COLLECT ENV NAME
+          i=1
+          while IFS="," read -r rec1
+            do
+                if [ -z "$rec1" ]; then
+                    echo * EnvVarSecs EMPTY *
+                  else
+                    echo -e \{\"Name\" : \"$rec1\", \"ValueFrom\" : \"dummyVal${i}\"\}, >> TEMPENVSEC
+                fi   
+            i=$((i+1))
+            done < <(cut -d "," -f3 ${TaskDefinition_family}_EnvVars.csv | tail -n +2)
+            
+          echo ---- END OF ENV SEC NAME COLLECTION ---
+          ######## VARIABLES PART-4 STARTS #######
+          i=1
+          while IFS="," read -r rec1
+            do
+                if [ -z "$rec1" ]; then
+                    echo * EnvValSecs EMPTY *
+                  else
+                    sed -i "s|dummyVal${i}|$rec1|g" TEMPENVSEC
+                fi
+            i=$((i+1))
+            done < <(cut -d "," -f4 ${TaskDefinition_family}_EnvVars.csv | tail -n +2)
+          
+          echo  -e \], >> TEMPENVSEC
+          cat TEMPENVSEC
+          echo ---- END OF ENV SEC VALUE COLLECTION ---
+          ######## VARIABLES PART-5 STARTS #######
+        echo -e \"PortMappings\": \[ > TEMPPORT
+          #lOOP TO COLLECT ENV NAME
+          if [ -z "$Host_Port" ]; then
+                    echo * Host_Port EMPTY *
+                  else
+                    echo -e \{\"HostPort\" : \"$Host_Port\", \"ContainerPort\" : \"$Container_Port\"\}, >> TEMPPORT
+          fi
+          echo  -e \], >> TEMPPORT
+          cat TEMPPORT
+          echo ---- END OF PORT COLLECTION ---
+
+        #REPLACE THE TEMPLATE WITH VARIABLE
+        sed -i "s|Container_Name|$Container_Name|g" output/taskdef-1-$TaskDefinition_family.json
+        sed -i "s|AccountNo|$AccountNo|g" output/taskdef-2-$TaskDefinition_family.json
+        sed -i "s|Container_Name|$Container_Name|g" output/taskdef-1-$TaskDefinition_family.json
+        sed -i "s|Image_URI|$Image_URI|g" output/taskdef-1-$TaskDefinition_family.json
+        sed -i "s|Container_Memory|$Mem_Hard|g" output/taskdef-1-$TaskDefinition_family.json
+        sed -i "s|Family_Name|$TaskDefinition_family|g" output/taskdef-2-$TaskDefinition_family.json
+        sed -i "s|TaskCPU|$TaskCPU|g" output/taskdef-2-$TaskDefinition_family.json
+        sed -i "s|TaskMemory|$TaskMemory|g" output/taskdef-2-$TaskDefinition_family.json
+        sed -i "s|PLATE|$Compatibility|g" output/taskdef-2-$TaskDefinition_family.json
+        sed -i "s|tskrolarn|$TaskRoleARN|g" output/taskdef-2-$TaskDefinition_family.json
+        sed -i "s|tskexerol|$TaskExecutionRoleARN|g" output/taskdef-2-$TaskDefinition_family.json
+        sed -i "s|memory_task|$TaskMemory|g" output/taskdef-2-$TaskDefinition_family.json
+        sed -i "s|cpu_task|$TaskCPU|g" output/taskdef-2-$TaskDefinition_family.json
+        sed -i "s|SRCVOL|$MountPoint_sourceVolume|g" output/taskdef-2-$TaskDefinition_family.json
+        sed -i "s|CONTPATH|$MountPoint_containerPath|g" output/taskdef-2-$TaskDefinition_family.json
+        sed -i "s|SRCPATH|$Volume_SourcePath|g" output/taskdef-2-$TaskDefinition_family.json
+        #COMBINE JSON PARTS
+        cat TEMPENV >> output/taskdef-1-$TaskDefinition_family.json
+        cat TEMPENVSEC >> output/taskdef-1-$TaskDefinition_family.json
+        cat TEMPPORT >> output/taskdef-1-$TaskDefinition_family.json
+        cat output/taskdef-2-$TaskDefinition_family.json >> output/taskdef-1-$TaskDefinition_family.json
+        cat output/taskdef-1-$TaskDefinition_family.json > output/taskdef-$TaskDefinition_family.json
+        cat output/taskdef-$TaskDefinition_family.json
+        done < <(tail -n +2 $UserInput)
+      
+#Export VarVal to other stages
+    - echo ---- END OF REPLACEMENT ---
+    - echo "TODOIT=${TODOIT}" >> build.env
+    - cat output/Family_Name.csv
+    - cat build.env
+
+#Verifying output and artifact storage
+  after_script:
+    - ls output/
+#Export json to other stages
+  artifacts:
+    expire_in: 1 days
+    paths:
+    - output/*
+#Export VarVal to other stages
+    reports:
+      dotenv: build.env
+#Perform on
+#  only:
+#    - main
+#    - dev
+#    - sit
+
+Deploy_CloudFormation_TD:
+  stage: CloudFormation_TD
+#Dependencies for Deploying on AWS
+  needs: [Create_JSON]
+  dependencies:
+    - Create_JSON
+  before_script:
+    - aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID_SANDBOX
+    - aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEYSANDBOX
+    - aws configure set region 	$AWS_REGION_SANDBOX
+  script:
+    #CASE CONVERSTION, small & CAPS
+    - |
+      export ACTIONSMALL=$(echo ${TODOIT,,})
+      export ACTIONCAPS=$(echo ${TODOIT^^})
+      while read -r FAMILYLINE
+        #Read output/Family_Name.csv FAMILYLINE and create CFS
+        do     
+          aws cloudformation $ACTIONSMALL-stack --stack-name $FAMILYLINE-TD --template-body file://output/taskdef-$FAMILYLINE.json   
+          # read the filter the status
+          export STACK_STATUS=$(aws cloudformation describe-stacks --stack-name $FAMILYLINE-TD --query 'Stacks[0].StackStatus' | cut -d\" -f2)
+            # Check the status and wait till it complete
+            while [ "$STACK_STATUS" != "${ACTIONCAPS}_COMPLETE" ]; 
+              do
+                sleep 1
+                aws cloudformation describe-stacks --stack-name $FAMILYLINE-TD --query 'Stacks[0].[StackStatus,StackStatusReason, CreationTime]' > stack.log
+                STACK_STATUS=$(cat stack.log | head -2 | tail -1 | cut -d\" -f2)
+                echo $STACK_STATUS for Stack $FAMILYLINE-TD
+                cat stack.log
+                  # If stack failed terminate the job
+                  if [ "$STACK_STATUS" = "ROLLBACK_COMPLETE" ]; then
+                    echo "---------- "
+                  else
+                    echo "**********"
+                  fi
+              done
+        done < output/Family_Name.csv
+        
+  when: manual
+  only:
+    - dev
+    - sit

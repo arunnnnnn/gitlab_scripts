@@ -1,0 +1,3 @@
+Action,AccountNo,TaskDefinition_family,TaskRoleARN,Compatibility,TaskExecutionRoleARN,TaskMemory,TaskCPU,Volume_Name,Volume_SourcePath,Container_Name,Image_URI,Mem_Hard,Container_Port,Host_Port,MountPoint_sourceVolume,MountPoint_containerPath,logDriver,Volume_SourcePath
+create,650869055350,third,ecsTaskExecutionRole,EC2,ecsTaskExecutionRole,128,256,MDS,/data/MDS,third,nginx:latest,128,80,7777,MDS,/hdd/data/MDS,awslogs,/data/MDS
+create,650869055350,fourth,ecsTaskExecutionRole,EC2,ecsTaskExecutionRole,128,256,MDS,/data/MDS,fourth,nginx:latest,128,80,8888,OMS,/hdd/data/OMS,awslogs,/data/OMS

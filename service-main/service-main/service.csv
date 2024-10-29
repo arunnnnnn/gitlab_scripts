@@ -1,0 +1,4 @@
+serviceName,Cluster,Desired_Count,Launch_Type,TaskDefinition,MaximumPercent,MinimumPercent,Scheduling_Strategy
+seventeenrc1,arun123,1,EC2,Arun,200,100,REPLICA
+eighteenteenrc1,arun123,1,EC2,Arun,100,50,REPLICA
+nineteenteenrc1,arun123,1,EC2,Arun,125,100,REPLICA

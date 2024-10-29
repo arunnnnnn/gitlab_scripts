@@ -1,0 +1,8 @@
+EC2Name,ClusterNode
+Cluster_Name,arun123
+Image_Id,ami-0d03b1ad793d7ac93
+Instance_Type,t2.medium
+Key_Name,ecs-agent
+SecurityGroup_Ids,sg-0ddbe364727bc3050
+Subnet_Id,subnet-0f13dcd71bcf41ff1
+IamInstance_Profile,ecsInstanceRole

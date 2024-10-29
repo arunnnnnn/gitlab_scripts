@@ -1,0 +1,13 @@
+
+          }
+        ],
+        "taskRoleArn":"arn:aws:iam::AccountNo:role/tskrolarn",
+        "requiresCompatibilities":["EC2"],
+        "cpu":"cpu_task",
+        "memory":"memory_task",
+        "Family": "Family_Name",
+        "ExecutionRoleArn": "arn:aws:iam::AccountNo:role/tskexerol"
+      }
+    }
+  }
+}

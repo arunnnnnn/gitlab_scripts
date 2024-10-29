@@ -1,0 +1,2 @@
+VARIABLE,VALUE
+REGION_URL,arn:aws:ssm:us-east-2:650869055350:parameter/region

@@ -1,0 +1,8 @@
+VARIABLES,VALUES,SECVAR,SECVAL
+LOGGING_LEVEL,info,REGION_URL,arn:aws:ssm:us-east-2:650869055350:parameter/region
+LOG,error
+THEME,black
+TIMEZONE,ist
+LOGPATH,/var
+ENV,bash
+CONFIGPATH,/home/first/config

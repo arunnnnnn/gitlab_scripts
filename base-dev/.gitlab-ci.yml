@@ -1,0 +1,15 @@
+stages:
+  - build
+  - deploy
+
+build_dummy:
+  stage: build
+  script:
+    - whoami && df -lh
+
+deploy_dummy:
+  stage: deploy
+  script:
+    - echo develop
+  environment:
+    name: develop

@@ -1,0 +1,87 @@
+#CI Stages to create instance in ECS cluster
+variables:
+  CustomUserInput: "UserInput.csv"
+  
+stages:
+    - EC2IN_CF_template
+    - CloudFormation_EC2IN
+
+#Stage1
+Create_JSON:
+  stage: EC2IN_CF_template
+  before_script:
+    - echo "Repo contents"
+    - ls
+#Collecting input
+  script:
+    - ECNAM=$(grep EC2Name $CustomUserInput | cut -d\, -f2)
+    - CLUST=$(grep Cluster_Name $CustomUserInput | cut -d\, -f2)
+    - AMIMG=$(grep Image_Id $CustomUserInput | cut -d\, -f2)
+    - INSTYPE=$(grep Instance_Type $CustomUserInput | cut -d\, -f2)
+    - KEYNAME=$(grep Key_Name $CustomUserInput | cut -d\, -f2)
+    - SGN=$(grep SecurityGroup_Ids  $CustomUserInput | cut -d\, -f2)
+    - var5=$(grep Subnet_Id $CustomUserInput | cut -d\, -f2)
+    - IAMROLE=$(grep IamInstance_Profile $CustomUserInput | cut -d\, -f2)
+    - echo $CLUST, $AMIMG, $INSTYPE, $KEYNAME, $SGN, $IAMROLE, $ECNAM
+#Export VarVal to other stages
+    - echo "STACKNAME=${ECNAM}" >> build.env
+    - echo "CLUSTNAME=${CLUST}" >> build.env
+    - cat build.env
+#Replacing the template with user provided values
+    - sed -i "s|ecs-cluster|$CLUST|g" EC2IN-template.json
+    - sed -i "s|EC2Name|$ECNAM|g" EC2IN-template.json
+    - sed -i "s|my-image|$AMIMG|g" EC2IN-template.json
+    - sed -i "s|instance-type|$INSTYPE|g" EC2IN-template.json
+    - sed -i "s|keypair|$KEYNAME|g" EC2IN-template.json
+    - sed -i "s|sg|$SGN|g" EC2IN-template.json
+    - sed -i "s|subnet_id|$var5|g" EC2IN-template.json
+    - sed -i "s|role|$IAMROLE|g" EC2IN-template.json
+    - sed -i "s|RGON|$AWS_REGION_SANDBOX|g" EC2IN-template.json
+#Verifying output and artifact storage
+    - cp EC2IN-template.json output/${ECNAM}-EC2IN-template.json
+    - cat output/${ECNAM}-EC2IN-template.json
+  after_script:
+    - ls output/
+#Export json to other stages
+  artifacts:
+    expire_in: 1 days
+    paths:
+    - output/*
+#Export VarVal to other stages
+    reports:
+      dotenv: build.env
+#Perform on
+  only:
+    - main 
+    - dev
+    - sit
+  
+Deploy_CloudFormation_EC2IN:
+  stage: CloudFormation_EC2IN
+#Dependencies for Deploying on AWS
+  needs: [Create_JSON]
+  dependencies:
+    - Create_JSON
+  before_script:
+    - aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID_SANDBOX
+    - aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEYSANDBOX
+    - aws configure set region 	$AWS_REGION_SANDBOX
+#Verify cluster status
+    #| cut -d\" -f2
+    - |
+       cluster_status=$(aws ecs describe-clusters --clusters $CLUSTNAME --query 'clusters[0].status'| cut -d\" -f2)
+       echo $cluster_status
+       if [ "$cluster_status" = "ACTIVE" ]; then
+       echo "cluster $CLUSTNAME"
+       else
+       exit
+       fi
+  script:
+    - aws cloudformation create-stack --stack-name $STACKNAME-EC2IN --template-body file://output/$STACKNAME-EC2IN-template.json
+  when: manual
+  only:
+    - main 
+    - dev 
+    - sit 
+
+

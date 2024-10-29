@@ -1,0 +1,40 @@
+variables:
+  DOCKER_REGISTRY: 650869055350.dkr.ecr.us-east-2.amazonaws.com
+  APP_NAME: sample-repository
+  #TAG: "$CI_COMMIT_SHORT_SHA-$CI_PIPELINE_ID"
+  TAG1: latest
+
+
+stages:
+  - build
+  - build-docker-image
+  - push-image-to-aws-ecr
+
+build-java-project:
+  stage: build
+  script:
+    mvn package
+  artifacts:
+    paths:
+      - /home/gitlab-runner/
+
+build-docker-image:
+  stage: build-docker-image
+  image: maven:3.8.4-openjdk-11
+  script:
+    - whoami
+    - docker info
+    - docker build -t $DOCKER_REGISTRY/$APP_NAME:"$TAG1" .
+    - docker images
+
+
+Push Docker Image to AWS ECR:
+  stage: push-image-to-aws-ecr
+  image: 
+    name: $DOCKER_REGISTRY/$APP_NAME:"$TAG1"
+  services:
+    - docker:dind
+  script:
+    - aws ecr get-login-password --region us-east-2 | docker login --username AWS --password-stdin $DOCKER_REGISTRY
+    - docker tag $DOCKER_REGISTRY/$APP_NAME:"$TAG1" $DOCKER_REGISTRY/$APP_NAME:"$TAG1"
+    - docker push $DOCKER_REGISTRY/$APP_NAME:"$TAG1"
